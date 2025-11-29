@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Millionnaire Scout - V2 Pro</title>
+    <style>
+        :root {
+            --bg-dark: #0f0f13;
+            --panel-bg: #1a1a24;
+            --gold: #ffd700;
+            --correct: #00e676;
+            --wrong: #ff1744;
+            --locked: #424242;
+            --text-main: #ffffff;
+            --team1: #2979ff;
+            --team2: #ff4081;
+            --team3: #aa00ff;
+        }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* --- LAYOUT PRINCIPAL --- */
+        .main-layout {
+            display: flex;
+            flex: 1;
+            height: 85vh;
+        }
+
+        /* --- COLONNES ÉQUIPES --- */
+        .team-column {
+            flex: 1;
+            background: var(--panel-bg);
+            border-right: 1px solid #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .team-column:hover { background: #252530; }
+        
+        /* État Buzzer Actif */
+        .team-active { 
+            background: #2a2a35 !important; 
+            box-shadow: inset 0 0 20px rgba(255, 215, 0, 0.2);
+            border: 2px solid var(--gold);
+        }
+
+        /* État Éliminé (Grisé) */
+        .team-locked {
+            filter: grayscale(100%);
+            opacity: 0.4;
+            pointer-events: none;
+            background: #000 !important;
+        }
+
+        .team-title {
+            font-size: 1.5rem; font-weight: bold; margin-bottom: 10px; text-transform: uppercase;
+            padding: 5px 15px; border-radius: 4px;
+        }
+        /* Editable team name controls */
+        .team-name { display: inline-block; vertical-align: middle; }
+        .edit-btn {
+            margin-left: 8px; background: transparent; border: 1px solid rgba(255,255,255,0.1); color: #ddd;
+            padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 0.8rem;
+        }
+        .edit-btn:hover { background: rgba(255,255,255,0.06); }
+        .team-name-input { font-size: 1rem; padding: 4px 6px; border-radius: 4px; border: 1px solid #444; background: transparent; color: white; }
+        .team-title .edit-btn { pointer-events: auto; }
+        .t1-color { color: var(--team1); border: 1px solid var(--team1); }
+        .t2-color { color: var(--team2); border: 1px solid var(--team2); }
+        .t3-color { color: var(--team3); border: 1px solid var(--team3); }
+
+        /* Échelle d'argent */
+        .money-ladder {
+            flex: 1;
+            width: 100%;
+            display: flex;
+            flex-direction: column-reverse; /* Bas vers haut */
+            justify-content: flex-start;
+            gap: 2px;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+
+        .ladder-step {
+            padding: 6px 4px;
+            text-align: center;
+            font-size: 1.15rem; /* augmenté */
+            color: #666;
+            border-radius: 3px;
+        }
+        
+        .ladder-step.milestone { color: white; font-weight: bold; }
+        .ladder-step.current { 
+            background: var(--gold); color: black; font-weight: bold; 
+            box-shadow: 0 0 10px var(--gold); transform: scale(1.05);
+        }
+
+        /* Jokers (Cachés par défaut) */
+        .joker-area {
+            height: 60px;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 10px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+        
+        .team-active .joker-area { opacity: 1; pointer-events: all; }
+
+        .joker-btn {
+            background: transparent; border: 1px solid white; color: white;
+            padding: 5px 10px; cursor: pointer; border-radius: 4px; font-size: 0.8rem;
+        }
+        .joker-btn:hover { background: rgba(255,255,255,0.2); }
+        .joker-used { text-decoration: line-through; opacity: 0.3; pointer-events: none; border-color: #555; }
+
+        /* --- ZONE CENTRALE (Questions) --- */
+        .center-stage {
+            flex: 2;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            background: radial-gradient(circle at center, #23232f 0%, #0f0f13 100%);
+            border-left: 2px solid #333;
+            border-right: 2px solid #333;
+        }
+
+        /* Logo container that fills the center-stage until a question is shown */
+        .logo-container { flex: 1; display: flex; align-items: center; justify-content: center; }
+        .logo-container img { max-width: 100%; max-height: 100%; object-fit: contain; }
+
+        .question-box {
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+            /* keep question box simpler; hidden until a question is active */
+            padding: 30px; margin-bottom: 30px;
+            text-align: center; font-size: 1.8rem;
+            display: none; align-items: center; justify-content: center;
+            text-shadow: 0 2px 4px black;
+        }
+        .question-box.visible { display: flex; border-top: 2px solid white; border-bottom: 2px solid white; min-height: 100px; }
+
+        .answers-container {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 15px;
+            visibility: hidden; /* Caché au début */
+        }
+        .answers-container.visible { visibility: visible; }
+
+        .answer-btn {
+            background: #1e1e2f; border: 1px solid #555; border-radius: 30px;
+            padding: 15px 25px; color: white; font-size: 1.2rem; cursor: pointer;
+            text-align: left; transition: 0.2s; position: relative;
+        }
+        .answer-btn:hover { border-color: var(--gold); background: #2a2a35; }
+        .answer-btn span { color: var(--gold); font-weight: bold; margin-right: 10px; }
+        
+        .ans-correct { background: var(--correct) !important; color: black !important; border-color: white;}
+        .ans-wrong { background: var(--wrong) !important; opacity: 0.5; }
+        .ans-dimmed { opacity: 0.1; }
+
+        /* --- BOUTONS CONTROLE ANIMATEUR --- */
+        .controls {
+            height: 15vh;
+            background: #000;
+            border-top: 1px solid #333;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+        }
+
+        .btn-ctrl {
+            padding: 12px 24px; font-size: 1rem; font-weight: bold; cursor: pointer;
+            border: none; border-radius: 5px; background: #333; color: white;
+        }
+        .btn-next { background: var(--gold); color: black; }
+        
+        /* Validation Manuelle (Réponse verbale) */
+        .manual-validation-box {
+            display: none; /* Caché sauf si buzz anticipé */
+            gap: 10px; padding: 10px; border: 1px solid #555; border-radius: 5px;
+            background: #222; animation: flashBorder 2s infinite;
+        }
+        .btn-manual-ok { background: var(--correct); }
+        .btn-manual-no { background: var(--wrong); }
+
+        @keyframes flashBorder { 0% { border-color: #555; } 50% { border-color: white; } 100% { border-color: #555; } }
+
+    </style>
+</head>
+<body>
+
+    <div class="main-layout">
+        <div class="team-column" id="team1" onclick="teamBuzz(1)">
+            <div class="team-title t1-color">
+                <span class="team-name" id="team-name-1">Équipe 1</span>
+                <button class="edit-btn" onclick="toggleEditTeamName(event,1)" title="Renommer">✎</button>
+            </div>
+            <div class="money-ladder" id="ladder1"></div>
+            <div class="joker-area" id="jokers1">
+                <button class="joker-btn" id="j50-1" onclick="use5050(event, 1)">50:50</button>
+                <button class="joker-btn" id="jC-1" onclick="useCouncil(event, 1)">Appel</button>
+            </div>
+        </div>
+
+        <div class="center-stage">
+            <div id="logo-container" class="logo-container">
+                <img id="start-logo" src="Logo_who_wants.png" alt="Logo">
+            </div>
+
+            <div class="question-box" id="question-text">
+            </div>
+
+            <div class="answers-container" id="answers-area">
+                <button class="answer-btn" onclick="selectAnswer(0)"><span id="l0">A:</span> <t id="opt0"></t></button>
+                <button class="answer-btn" onclick="selectAnswer(1)"><span id="l1">B:</span> <t id="opt1"></t></button>
+                <button class="answer-btn" onclick="selectAnswer(2)"><span id="l2">C:</span> <t id="opt2"></t></button>
+                <button class="answer-btn" onclick="selectAnswer(3)"><span id="l3">D:</span> <t id="opt3"></t></button>
+            </div>
+        </div>
+
+        <div class="team-column" id="team2" onclick="teamBuzz(2)">
+            <div class="team-title t2-color">
+                <span class="team-name" id="team-name-2">Équipe 2</span>
+                <button class="edit-btn" onclick="toggleEditTeamName(event,2)" title="Renommer">✎</button>
+            </div>
+            <div class="money-ladder" id="ladder2"></div>
+            <div class="joker-area" id="jokers2">
+                <button class="joker-btn" id="j50-2" onclick="use5050(event, 2)">50:50</button>
+                <button class="joker-btn" id="jC-2" onclick="useCouncil(event, 2)">Appel</button>
+            </div>
+        </div>
+
+        <div class="team-column" id="team3" onclick="teamBuzz(3)">
+            <div class="team-title t3-color">
+                <span class="team-name" id="team-name-3">Équipe 3</span>
+                <button class="edit-btn" onclick="toggleEditTeamName(event,3)" title="Renommer">✎</button>
+            </div>
+            <div class="money-ladder" id="ladder3"></div>
+            <div class="joker-area" id="jokers3">
+                <button class="joker-btn" id="j50-3" onclick="use5050(event, 3)">50:50</button>
+                <button class="joker-btn" id="jC-3" onclick="useCouncil(event, 3)">Appel</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <div id="manual-box" class="manual-validation-box">
+            <span>Validation Orale :</span>
+            <button class="btn-ctrl btn-manual-ok" onclick="manualValidate(true)">Correct (V)</button>
+            <button class="btn-ctrl btn-manual-no" onclick="manualValidate(false)">Faux (X)</button>
+        </div>
+
+        <button class="btn-ctrl" onclick="revealOptions()">Afficher Choix</button>
+        <button class="btn-ctrl btn-next" onclick="nextQuestion()">Question Suivante >></button>
+    </div>
+
+    <script>
+        // --- DONNÉES ---
+        const moneyScale = [0, 200, 500, 1000, 4000, 8000, 16000, 64000, 250000, 500000, 1000000];
+        const safetyNets = [0, 500, 4000, 16000, 250000];
+
+        // Ajoutez vos questions ici
+        const questions = [
+            { q: "Quel est le nom du cheval de l'Imam Hussein ?", options: ["Qaswa", "Buraq", "Duldul", "Zuljanah"], correct: 3 },
+            { q: "Combien de pattes a une araignée ?", options: ["6", "8", "10", "12"], correct: 1 },
+            { q: "En quelle année l'homme a marché sur la Lune ?", options: ["1959", "1975", "1969", "1980"], correct: 2 },
+            { q: "quel prophete a rencontré la Reine de Saba?", options: ["Nabi Soulayman", "Nabi Moussa", "Nabi Yaakoub", "Nabi Dawoud"], correct: 0 },
+            { q: "Quel animal peut dormir debout ?", options: ["Le cheval", "Le poulet", "Le requin", "Le dauphin",], correct: 0 },
+            { q: "Quel club détient le plus de Ligues des Champions ?", options: ["Real Madrid", "FC Barcelone", "Liverpool", "Al Nejme"], correct: 0 },
+            { q: "Quel rôle a Shelly dans Brawl Stars ?", options: ["Tireuse à courte portée", "Soigneuse", "Robot géant", "Mage"], correct: 0 },
+            { q: "Quelle est la planète la plus proche du Soleil ?", options: ["Mercure", "Vénus", "Mars", "Jupiter"], correct: 0 },
+            { q: "Quel est le nom du bateau dans la célèbre série animée 'One Piece' ?", options: ["Thousand Sunny", "Going Merry", "Red Force", "Moby Dick"], correct: 1 },
+            { q: "Ali Akbar était le... de l'Imam Hussein (as) ?", options: ["Frère", "Fils", "Neveu", "Cousin"], correct: 1 },
+            { q: "Combien de couleurs y a-t-il dans un arc-en-ciel ?", options: ["5", "6", "7", "8"], correct: 2 },
+            { q: "Quel animal peut vivre sans tête pendant une semaine ?", options: ["Le poulet", "Le cafard", "Le serpent", "La tortue"], correct: 1 },
+            { q: "Qui a peint la Joconde ?", options: ["Vincent van Gogh", "Pablo Picasso", "Leonardo da Vinci", "Claude Monet"], correct: 2 },
+            { q: "Combien de temps faut-il à la lumière du soleil pour atteindre la Terre ?", options: ["8 secondes", "8 minutes", "8 heures", "Instantané"], correct: 1 },
+            { q: "Combien de femme sont Ma'asoumin (Infaillible, ne fait pas de péché)? Nomme la/les", options: ["2", "4", "0", "1"], correct: 3 },
+            { q: "Cette année, qui est le president des Scouts Al Montazar?", options: ["Chef Ali Lajoie", "Chef Haydar", "L'imam Al-Mahdi", "Kylian Mbappe"], correct: 2 },
+            { q: "Recite les 4 premiers verset de sourate Al-Shams", options: ["Verset", "Verset", "Verset", "Verset"], correct: 0 },
+            { q: "Quel est le jeu vidéo le plus vendu de tous les temps ?", options: ["GTA V", "Minecraft", "Tetris", "Fortnite"], correct: 1 },
+            { q: "Combien de dents a un escargot ?", options: ["0", "Environ 50", "Environ 2000", "Environ 25000"], correct: 3 },
+            { q: "Dans quelle salle sommes nous maintenant ?", options: ["4", "6", "3", "5"], correct: 3 },
+            { q: "Combien y a t-il d'Imam ?", options: ["10", "12", "14", "16"], correct: 1 },
+            { q: "Combien y a t-il de Ma'asoumin (infaillibles) ?", options: ["10", "12", "14", "16"], correct: 2 },
+            { q: "Quel est le plus grand océan du monde ?", options: ["Atlantique", "Indien", "Arctique", "Pacifique"], correct: 3 },
+            { q: "Quel est le prenom du dernier Imam ?", options: ["Mohammad", "Ali", "Mahdi", "Kylian Mbappe"], correct: 0 },
+            { q: "Quel est le plus petit pays du monde en termes de superficie terrestre ?", options: ["Monaco", "Nauru", "Cité du Vatican", "Saint-Marin"], correct: 2 },
+            { q: "Comment s'appelle la peur des longs mots ?", options: ["Logophobie", "Hippopotomonstrosesquippedaliophobie", "Maxilonguophobie", "Lexicophobie"], correct: 1 },
+
+        ];
+
+        // --- ETAT DU JEU ---
+        let currentQIndex = -1;
+        let teams = [
+            { level: 0, j50: true, jCouncil: true, locked: false }, // Team 1 (index 0)
+            { level: 0, j50: true, jCouncil: true, locked: false }, // Team 2
+            { level: 0, j50: true, jCouncil: true, locked: false }  // Team 3
+        ];
+        
+        let activeTeamId = null; // 1, 2, ou 3
+        let optionsVisible = false;
+        let questionFinished = false;
+
+        // --- INITIALISATION ---
+        function initLadders() {
+            for(let t=1; t<=3; t++) {
+                const container = document.getElementById(`ladder${t}`);
+                container.innerHTML = '';
+                moneyScale.forEach((amount, index) => {
+                    let div = document.createElement('div');
+                    div.className = 'ladder-step';
+                    div.innerText = amount.toLocaleString() + ' €';
+                    if(safetyNets.includes(amount) && amount > 0) div.classList.add('milestone');
+                    div.id = `t${t}-step-${index}`;
+                    container.appendChild(div);
+                });
+            }
+            updateLaddersUI();
+        }
+
+        // --- MOTEUR DE JEU ---
+
+        function nextQuestion() {
+            if(currentQIndex < questions.length - 1) {
+                currentQIndex++;
+                resetRound();
+                displayQuestion();
+            } else {
+                alert("Fin du jeu !");
+            }
+        }
+
+        function resetRound() {
+            activeTeamId = null;
+            optionsVisible = false;
+            questionFinished = false;
+            
+            // Déverrouiller tout le monde
+            teams.forEach(t => t.locked = false);
+            for(let i=1; i<=3; i++) {
+                const col = document.getElementById(`team${i}`);
+                col.classList.remove('team-active', 'team-locked');
+            }
+
+            // UI Reset
+            document.getElementById('answers-area').classList.remove('visible');
+            document.getElementById('manual-box').style.display = 'none';
+            
+            const btns = document.getElementsByClassName('answer-btn');
+            for(let btn of btns) {
+                btn.className = 'answer-btn'; // reset colors
+            }
+            // show logo again when round resets
+            showLogo();
+        }
+
+        function displayQuestion() {
+            // Hide logo and show question box
+            hideLogo();
+            const qBox = document.getElementById('question-text');
+            qBox.classList.add('visible');
+            qBox.innerText = questions[currentQIndex].q;
+            for(let i=0; i<4; i++) {
+                document.getElementById(`opt${i}`).innerText = questions[currentQIndex].options[i];
+            }
+        }
+
+        function revealOptions() {
+            optionsVisible = true;
+            document.getElementById('answers-area').classList.add('visible');
+            document.getElementById('manual-box').style.display = 'none'; // Cacher validation manuelle si on montre les choix
+        }
+
+        function showLogo() {
+            const logo = document.getElementById('logo-container');
+            const qBox = document.getElementById('question-text');
+            if (logo) logo.style.display = 'flex';
+            if (qBox) {
+                qBox.classList.remove('visible');
+                // clear question text
+                qBox.innerText = '';
+            }
+            // hide answers
+            document.getElementById('answers-area').classList.remove('visible');
+        }
+
+        function hideLogo() {
+            const logo = document.getElementById('logo-container');
+            if (logo) logo.style.display = 'none';
+        }
+
+        // --- GESTION BUZZER ---
+
+        function teamBuzz(id) {
+            if(questionFinished) return;
+            if(teams[id-1].locked) return; // Equipe éliminée de la manche
+            if(activeTeamId !== null) return; // Quelqu'un parle déjà
+
+            // Prise de main
+            activeTeamId = id;
+            document.getElementById(`team${id}`).classList.add('team-active');
+
+            // Logique d'affichage
+            if(!optionsVisible) {
+                // Buzz AVANT les choix -> Afficher validation manuelle
+                document.getElementById('manual-box').style.display = 'flex';
+            }
+        }
+
+        // --- VALIDATION MANUELLE (Avant affichage choix) ---
+        function manualValidate(isCorrect) {
+            if(activeTeamId === null) return;
+
+            if(isCorrect) {
+                // Victoire immédiate
+                applyWin(activeTeamId);
+                revealOptions(); // Montrer pour info
+                highlightCorrectAnswer();
+            } else {
+                // Échec
+                applyLoss(activeTeamId);
+                // Relance le jeu pour les autres
+                activeTeamId = null; 
+                document.getElementById('manual-box').style.display = 'none';
+            }
+        }
+
+        // --- VALIDATION CLASSIQUE (Click sur réponse A/B/C/D) ---
+        function selectAnswer(idx) {
+            if(questionFinished) return;
+            if(activeTeamId === null) {
+                alert("Aucune équipe n'a buzzé ! Cliquez sur une équipe d'abord.");
+                return;
+            }
+
+            const correctIdx = questions[currentQIndex].correct;
+            const btns = document.getElementsByClassName('answer-btn');
+
+            if(idx === correctIdx) {
+                btns[idx].classList.add('ans-correct');
+                applyWin(activeTeamId);
+            } else {
+                btns[idx].classList.add('ans-wrong');
+                applyLoss(activeTeamId);
+                
+                // Si tout le monde est bloqué
+                if(teams.every(t => t.locked)) {
+                    btns[correctIdx].classList.add('ans-correct');
+                    questionFinished = true;
+                } else {
+                    // On laisse la chance aux autres
+                    activeTeamId = null;
+                }
+            }
+        }
+
+        // --- LOGIQUE GAIN / PERTE ---
+
+        function applyWin(id) {
+            let t = teams[id-1];
+            if(t.level < moneyScale.length - 1) t.level++;
+            questionFinished = true;
+            updateLaddersUI();
+            
+            // Audio effect win (optionnel)
+        }
+
+        function applyLoss(id) {
+            let t = teams[id-1];
+            
+            // Verrouiller l'équipe pour ce tour
+            t.locked = true;
+            document.getElementById(`team${id}`).classList.remove('team-active');
+            document.getElementById(`team${id}`).classList.add('team-locked');
+
+            // Calcul chute argent
+            let currentAmount = moneyScale[t.level];
+            let safeAmount = 0;
+            if(currentAmount >= 32000) safeAmount = 32000;
+            else if(currentAmount >= 1000) safeAmount = 1000;
+            
+            // Trouver l'index correspondant au filet de sécurité
+            t.level = moneyScale.indexOf(safeAmount);
+            
+            updateLaddersUI();
+        }
+
+        function highlightCorrectAnswer() {
+            const correctIdx = questions[currentQIndex].correct;
+            document.getElementsByClassName('answer-btn')[correctIdx].classList.add('ans-correct');
+        }
+
+        function updateLaddersUI() {
+            for(let t=1; t<=3; t++) {
+                // Clean old active classes
+                for(let i=0; i<moneyScale.length; i++) {
+                    document.getElementById(`t${t}-step-${i}`).classList.remove('current');
+                }
+                // Set new active
+                let lvl = teams[t-1].level;
+                let activeStep = document.getElementById(`t${t}-step-${lvl}`);
+                activeStep.classList.add('current');
+                activeStep.scrollIntoView({ block: "center", behavior: "smooth" });
+            }
+        }
+
+        // --- JOKERS ---
+        function use5050(e, id) {
+            e.stopPropagation(); // Empêche de trigger le buzzer à nouveau
+            if(activeTeamId !== id) return;
+            if(!teams[id-1].j50) return;
+
+            if(!optionsVisible) { alert("Affichez les choix d'abord !"); return; }
+
+            const correct = questions[currentQIndex].correct;
+            let removed = 0;
+            const btns = document.getElementsByClassName('answer-btn');
+            
+            // Algorithme simple pour retirer 2 mauvais choix
+            for(let i=0; i<4; i++) {
+                if(i !== correct && removed < 2) {
+                    if(Math.random() > 0.3 || i===3) { // Randomisation légère
+                        btns[i].classList.add('ans-dimmed');
+                        removed++;
+                    }
+                }
+            }
+            
+            // UI Update Joker
+            teams[id-1].j50 = false;
+            document.getElementById(`j50-${id}`).classList.add('joker-used');
+        }
+
+        function useCouncil(e, id) {
+            e.stopPropagation();
+            if(activeTeamId !== id) return;
+            if(!teams[id-1].jCouncil) return;
+            
+            alert("⏱ 30 SECONDES DE CONSEIL !");
+            
+            teams[id-1].jCouncil = false;
+            document.getElementById(`jC-${id}`).classList.add('joker-used');
+        }
+
+        // --- Editable team names (localStorage) ---
+        const TEAM_NAMES_KEY = 'millionaireTeamNames';
+
+        function loadTeamNames() {
+            try {
+                const stored = JSON.parse(localStorage.getItem(TEAM_NAMES_KEY) || 'null');
+                for (let i = 1; i <= 3; i++) {
+                    const el = document.getElementById(`team-name-${i}`);
+                    if (!el) continue;
+                    const name = (stored && stored[i-1]) || el.textContent || `Équipe ${i}`;
+                    el.textContent = name;
+                }
+            } catch (err) {
+                console.warn('Could not load team names', err);
+            }
+        }
+
+        function startEditingTeamName(id) {
+            const span = document.getElementById(`team-name-${id}`);
+            if (!span) return;
+            const current = span.textContent || `Équipe ${id}`;
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.id = `team-name-input-${id}`;
+            input.className = 'team-name-input';
+            input.value = current;
+            // Replace span with input
+            span.replaceWith(input);
+            input.focus();
+            input.select();
+
+            // Save on Enter, cancel on Escape
+            input.addEventListener('keydown', (ev) => {
+                if (ev.key === 'Enter') saveTeamName(id);
+                if (ev.key === 'Escape') cancelEditTeamName(id, current);
+            });
+            // Prevent clicks on input from bubbling to team column (buzz)
+            input.addEventListener('click', (ev) => ev.stopPropagation());
+        }
+
+        function cancelEditTeamName(id, fallback) {
+            const input = document.getElementById(`team-name-input-${id}`);
+            if (!input) return;
+            const span = document.createElement('span');
+            span.className = 'team-name';
+            span.id = `team-name-${id}`;
+            span.textContent = fallback || `Équipe ${id}`;
+            input.replaceWith(span);
+        }
+
+        function saveTeamName(id) {
+            const input = document.getElementById(`team-name-input-${id}`);
+            if (!input) return;
+            let name = input.value.trim();
+            if (!name) name = `Équipe ${id}`;
+            const span = document.createElement('span');
+            span.className = 'team-name';
+            span.id = `team-name-${id}`;
+            span.textContent = name;
+            input.replaceWith(span);
+
+            // Persist
+            try {
+                const stored = JSON.parse(localStorage.getItem(TEAM_NAMES_KEY) || 'null') || [null, null, null];
+                stored[id-1] = name;
+                localStorage.setItem(TEAM_NAMES_KEY, JSON.stringify(stored));
+            } catch (err) {
+                console.warn('Could not save team name', err);
+            }
+        }
+
+        function toggleEditTeamName(ev, id) {
+            // prevent the column's click handler (buzz) from firing
+            if (ev && ev.stopPropagation) ev.stopPropagation();
+            const input = document.getElementById(`team-name-input-${id}`);
+            if (input) {
+                saveTeamName(id);
+            } else {
+                startEditingTeamName(id);
+            }
+        }
+
+    // --- START ---
+    // Load persisted names, then initialize ladders and show logo
+    loadTeamNames();
+    initLadders();
+    showLogo();
+        // Clavier
+        document.addEventListener('keydown', (e) => {
+            if(e.key === '1') teamBuzz(1);
+            if(e.key === '2') teamBuzz(2);
+            if(e.key === '3') teamBuzz(3);
+        });
+
+    </script>
+</body>
+</html>
